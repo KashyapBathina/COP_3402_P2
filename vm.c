@@ -117,15 +117,23 @@ void load_bof(const char *filename, BOFHeader *header) {
 
 // Function to print the program in assembly form
 void print_program(const BOFHeader *header) {
+    printf("Address Instruction\n");
     // Print instructions
     for (word_type addr = header->text_start_address; addr < (header->text_start_address + header->text_length); addr++) {
         bin_instr_t instr = memory.instrs[addr];
         const char *asm_form = instruction_assembly_form(addr, instr);
-        printf("%u: %s\n", addr, asm_form);
+        printf("%5u: %s\n", addr, asm_form);
     }
 
-    // Print data section (optional: can be customized as needed)
-    printf("%u: 0 ...\n", header->data_start_address);
+    //printf("%u: %d\t", header->data_start_address, memory.words[header->data_start_address]);
+    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++) {
+        printf("%5u: %d", addr, memory.words[addr]);
+        if (addr < header->data_start_address + header->data_length) {
+            printf("\t"); // Add tab spacing between data entries
+        }
+
+    }
+    printf(" ...\n");
 }
 
 // Function to execute the program
