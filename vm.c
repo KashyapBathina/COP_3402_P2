@@ -125,13 +125,15 @@ void print_program(const BOFHeader *header) {
         printf("%5u: %s\n", addr, asm_form);
     }
 
+    int i=0;
+
     //printf("%u: %d\t", header->data_start_address, memory.words[header->data_start_address]);
-    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++) {
+    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++, i++) {
         printf("%5u: %d", addr, memory.words[addr]);
         if (addr < header->data_start_address + header->data_length) {
             printf("\t"); // Add tab spacing between data entries
         }
-
+        if (i%4==0 && i!=0) printf("\n");
     }
     printf(" ...\n");
 }
