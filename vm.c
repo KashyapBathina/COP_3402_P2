@@ -125,17 +125,36 @@ void print_program(const BOFHeader *header) {
         printf("%5u: %s\n", addr, asm_form);
     }
 
-    int i=0;
 
-    //printf("%u: %d\t", header->data_start_address, memory.words[header->data_start_address]);
+    int i = 0;
+    int items_in_line = 0;  
+
     for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++, i++) {
-        printf("%5u: %d", addr, memory.words[addr]);
-        if (addr < header->data_start_address + header->data_length) {
-            printf("\t"); // Add tab spacing between data entries
+        if (memory.words[addr] == 0 && memory.words[addr + 1] == 0 && memory.words[addr + 2] == 0) {
+            // print ellipses and move to a new line if alrdy has 4 items
+            if (items_in_line == 4) {
+                printf("%5u: 0\n", addr);  
+                printf("     ...\n");      
+            } else {
+                printf("%5u: 0\t...\n", addr);  
+            }
+
+            while (addr <= header->data_start_address + header->data_length && memory.words[addr] == 0) {
+                addr++;
+            }
+            addr--; 
+            items_in_line = 0; 
+        } else {
+            printf("%5u: %d\t", addr, memory.words[addr]);
+            items_in_line++;
+
+            if (items_in_line == 5) {
+                printf("\n");
+                items_in_line = 0;
+            }
         }
-        if (i%4==0 && i!=0) printf("\n");
     }
-    printf(" ...\n");
+    printf("\n");
 }
 
 // Function to execute the program
