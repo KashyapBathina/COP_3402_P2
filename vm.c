@@ -36,6 +36,12 @@ word_type HI, LO;                    // Special registers
 // Tracing flag
 bool tracing = false;
 
+// System call codes
+#define EXIT_SC 1            // Exit system call code
+#define PRINT_STR_SC 3       // Print string system call code
+#define START_TRACING_SC 2046  // Start tracing system call code
+#define STOP_TRACING_SC 2047   // Stop tracing system call code
+
 // Function Prototypes
 void load_bof(const char *filename, BOFHeader *header);
 void print_program(const BOFHeader *header);
@@ -83,15 +89,13 @@ int main(int argc, char *argv[]) {
         bail_with_error("VM invariants violated after initialization.");
     }
 
-    // Handle -p flag
-    if (print_flag) {
+    if (print_flag) { // Handle -p flag
         print_program(&header);
         exit(EXIT_SUCCESS);
     }
-
-    // Execute the program
-    execute_program(&header);
-
+    else {// Execute the program
+        execute_program(&header);
+    }
     return 0;
 }
 
@@ -126,8 +130,7 @@ void print_program(const BOFHeader *header) {
     }
 
 
-    int i = 0;
-    int items_in_line = 0;  
+    int i = 0, items_in_line = 0;
 
     for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++, i++) {
         if (memory.words[addr] == 0 && memory.words[addr + 1] == 0 && memory.words[addr + 2] == 0) {
@@ -157,18 +160,22 @@ void print_program(const BOFHeader *header) {
     printf("\n");
 }
 
+
 // Function to execute the program
 void execute_program(const BOFHeader *header) {
-    while (1) {
-        // Ensure PC is within bounds
-        if (PC < 0 || PC >= MEMORY_SIZE_IN_WORDS) {
-            bail_with_error("PC out of bounds: %d", PC);
-        }
-
+    // Ensure the loop runs until the last instruction in the text section
+    while (PC < header->text_start_address + header->text_length) {
         bin_instr_t instr = memory.instrs[PC];
         address_type current_addr = PC;
-        PC++; // Increment PC before execution
 
+        // If the instruction is EXIT, print and stop the loop
+        const char *asm_form = instruction_assembly_form(current_addr, instr);
+        if (strcmp(asm_form, "EXIT 0") == 0) {
+            // Print the final state before exiting
+            print_vm_state(current_addr, instr);
+            break;  // Exit loop after processing the EXIT instruction
+        }
+        
         // Execute the instruction
         execute_instruction(instr);
 
@@ -176,8 +183,14 @@ void execute_program(const BOFHeader *header) {
         if (tracing) {
             print_vm_state(current_addr, instr);
         }
+
+
+        // Increment PC after processing the instruction
+        PC++;
     }
 }
+
+
 
 // Function to execute a single instruction
 void execute_instruction(bin_instr_t instr) {
@@ -224,7 +237,7 @@ void execute_instruction(bin_instr_t instr) {
                     }
                     break;
                 default:
-                    printf("Handling custom immediate instruction with opcode %d\n", instr.immed.op);
+                    //printf("Handling custom immediate instruction with opcode %d\n", instr.immed.op);
                     break;
             }
             break;
@@ -234,52 +247,59 @@ void execute_instruction(bin_instr_t instr) {
             break;
 
         default:
-            bail_with_error("Unknown instruction type: %d", it);
+            //bail_with_error("Unknown instruction type: %d", it);
             break;
     }
 }
 
-// Assign unique system call codes
-#define print_str_sc 3  // Assign a unique value, like 3
-#define exit_sc 2       // Example for exiting
-
+// Function to handle system calls
 void handle_system_call(bin_instr_t instr) {
-    syscall_type code = instruction_syscall_number(instr);
+    int code = instruction_syscall_number(instr);  // No enum used here
 
-    // First handle custom system call separately
-    if (code == print_str_sc) {
-        printf("Printing string\n");
-        return;  // Return to avoid executing the rest of the switch statement
-    }
-
-    // Use switch statement to handle other cases
     switch (code) {
-        case 2:  // System call to exit the program
-            printf("Exiting program\n");
+        case EXIT_SC:  // System call to exit the program
+            //printf("Exiting program\n");
             exit(0);
-        case 2047:
-            printf("Handling custom system call 2047\n");
+        case PRINT_STR_SC:
+            //printf("Printing string\n");
             break;
-        case 2046:
-            printf("Handling custom system call 2046\n");
+        case START_TRACING_SC:  // Start tracing
+            tracing = true;
+            //printf("Tracing started\n");
+            break;
+        case STOP_TRACING_SC:  // Stop tracing
+            tracing = false;
+            //printf("Tracing stopped\n");
             break;
         default:
-            printf("Unknown system call code: %d\n", code);
+            bail_with_error("Unknown system call code: %d", code);
             break;
     }
 }
 
 // Function to print the VM's state for tracing
 void print_vm_state(address_type addr, bin_instr_t instr) {
-    printf("PC: %u\n", PC);
-    printf("Registers:\n");
-    for (int i = 0; i < NUM_REGISTERS; i++) {
-        printf("  %s: %d ", regname_get(i), registers[i]);
+    printf("      PC: %u\n", PC);
+    for (int i = 0; i < NUM_REGISTERS; i++) { // printing registers
+        printf("  GPR[%s]: %d ", regname_get(i), registers[i]);
+        if (i%4==0 && i!=0) printf("\n");
     }
     printf("\n");
+
+
+    for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
+        if ((addr==registers[GP] || addr==registers[SP]) || memory.words[addr] != 0) {
+            printf("%5u: %d\t", addr, memory.words[addr]);
+        }
+    }
+    printf("\n");
+
+
     const char *asm_form = instruction_assembly_form(addr, instr);
+    printf("\n");
     printf("==> %u: %s\n", addr, asm_form);
 }
+
 
 // Function to check VM invariants
 bool check_invariants(const BOFHeader *header) {
