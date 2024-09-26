@@ -200,10 +200,14 @@ void execute_instruction(bin_instr_t instr) {
         case comp_instr_type:
             switch (instr.comp.func) {
                 case ADD_F:
-                    registers[instr.comp.rt] = registers[instr.comp.rs] + registers[instr.comp.rt];
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.comp.offset)] + registers[SP];
                     break;
                 case SUB_F:
-                    registers[instr.comp.rt] = registers[instr.comp.rs] - registers[instr.comp.rt];
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.comp.offset)] - registers[SP];
+                    break;
+                case LWR_F:
+                    // Load the word from the calculated memory location into the register
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.comp.offset)];
                     break;
                 case MUL_F:
                     registers[instr.comp.rt] = registers[instr.comp.rs] * registers[instr.comp.rt];
@@ -214,6 +218,10 @@ void execute_instruction(bin_instr_t instr) {
                     }
                     registers[instr.comp.rt] = registers[instr.comp.rs] / registers[instr.comp.rt];
                     break;
+                case SWR_F:
+                    // Store the word at the calculated memory location
+                    memory.words[registers[instr.comp.rt] + machine_types_sgnExt(instr.comp.offset)] = registers[instr.comp.rs];
+                    break;
                 default:
                     bail_with_error("Unknown computational function code: %d", instr.comp.func);
                     break;
@@ -223,7 +231,11 @@ void execute_instruction(bin_instr_t instr) {
         case immed_instr_type:
             switch (instr.immed.op) {
                 case ADDI_O:
-                    registers[instr.immed.reg] += machine_types_sgnExt(instr.immed.immed);
+                    // Calculate the correct memory address using $sp and the immediate value (offset)
+                    word_type address = registers[SP] + machine_types_sgnExt(instr.immed.immed);
+                    
+                    // Perform the addition and store the result in the calculated memory location
+                    memory.words[address] = registers[SP] + instr.immed.reg; 
                     break;
                 case ANDI_O:
                     registers[instr.immed.reg] &= machine_types_zeroExt(instr.immed.immed);
@@ -290,6 +302,15 @@ void print_vm_state(address_type addr, bin_instr_t instr) {
     for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
         if ((addr==registers[GP] || addr==registers[SP]) || memory.words[addr] != 0) {
             printf("%5u: %d\t", addr, memory.words[addr]);
+        }
+        else {
+            if (addr!=registers[SP]-1) {
+                addr++;
+                while (memory.words[addr]==0 && addr!=registers[SP]-1) {
+                    addr++;
+                }
+                printf("...\t");
+            }
         }
     }
     printf("\n");
