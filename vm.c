@@ -163,6 +163,11 @@ void print_program(const BOFHeader *header) {
 
 // Function to execute the program
 void execute_program(const BOFHeader *header) {
+
+    bin_instr_t instr = memory.instrs[PC];
+    address_type current_addr = PC;
+    print_vm_state(current_addr, instr);
+    
     // Ensure the loop runs until the last instruction in the text section
     while (PC < header->text_start_address + header->text_length) {
         bin_instr_t instr = memory.instrs[PC];
@@ -176,14 +181,15 @@ void execute_program(const BOFHeader *header) {
             break;  // Exit loop after processing the EXIT instruction
         }
         
-        // Execute the instruction
-        execute_instruction(instr);
 
         // Handle tracing if enabled
         if (tracing) {
             print_vm_state(current_addr, instr);
         }
 
+        // Execute the instruction
+        execute_instruction(instr);
+        
 
         // Increment PC after processing the instruction
         PC++;
@@ -200,14 +206,14 @@ void execute_instruction(bin_instr_t instr) {
         case comp_instr_type:
             switch (instr.comp.func) {
                 case ADD_F:
-                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.comp.offset)] + registers[SP];
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.immed.offset)] + registers[SP];
                     break;
                 case SUB_F:
-                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.comp.offset)] - registers[SP];
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.immed.offset)] - registers[SP];
                     break;
                 case LWR_F:
                     // Load the word from the calculated memory location into the register
-                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.comp.offset)];
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.immed.offset)];
                     break;
                 case MUL_F:
                     registers[instr.comp.rt] = registers[instr.comp.rs] * registers[instr.comp.rt];
@@ -220,7 +226,7 @@ void execute_instruction(bin_instr_t instr) {
                     break;
                 case SWR_F:
                     // Store the word at the calculated memory location
-                    memory.words[registers[instr.comp.rt] + machine_types_sgnExt(instr.comp.offset)] = registers[instr.comp.rs];
+                    memory.words[registers[instr.comp.rt] + machine_types_sgnExt(instr.immed.offset)] = registers[instr.comp.rs];
                     break;
                 default:
                     bail_with_error("Unknown computational function code: %d", instr.comp.func);
@@ -231,11 +237,11 @@ void execute_instruction(bin_instr_t instr) {
         case immed_instr_type:
             switch (instr.immed.op) {
                 case ADDI_O:
-                    // Calculate the correct memory address using $sp and the immediate value (offset)
-                    word_type address = registers[SP] + machine_types_sgnExt(instr.immed.immed);
-                    
-                    // Perform the addition and store the result in the calculated memory location
-                    memory.words[address] = registers[SP] + instr.immed.reg; 
+                    // Calculate the correct offset from $sp
+                    word_type offset = machine_types_formOffset(instr.immed.offset);
+                    //printf("%d", offset);
+                    // Update the memory at GPR[$sp] + offset
+                    memory.words[registers[SP] + offset] = instr.immed.immed;
                     break;
                 case ANDI_O:
                     registers[instr.immed.reg] &= machine_types_zeroExt(instr.immed.immed);
@@ -298,15 +304,14 @@ void print_vm_state(address_type addr, bin_instr_t instr) {
     }
     printf("\n");
 
-
     for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
-        if ((addr==registers[GP] || addr==registers[SP]) || memory.words[addr] != 0) {
+        if (addr==registers[GP] || addr==registers[SP] || memory.words[addr] != 0) {
             printf("%5u: %d\t", addr, memory.words[addr]);
         }
         else {
-            if (addr!=registers[SP]-1) {
+            if (addr!=registers[SP]-1 && memory.words[addr+1]==0) {
                 addr++;
-                while (memory.words[addr]==0 && addr!=registers[SP]-1) {
+                while (memory.words[addr]==0 && memory.words[addr+1]==0 && addr!=registers[SP]-1) {
                     addr++;
                 }
                 printf("...\t");
@@ -314,6 +319,9 @@ void print_vm_state(address_type addr, bin_instr_t instr) {
         }
     }
     printf("\n");
+
+    
+    //printf("hello %d", memory.words[4095]);
 
 
     const char *asm_form = instruction_assembly_form(addr, instr);
