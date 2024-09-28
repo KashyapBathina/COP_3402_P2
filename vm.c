@@ -206,30 +206,70 @@ void execute_instruction(bin_instr_t instr) {
         case comp_instr_type:
             switch (instr.comp.func) {
                 case ADD_F:
-                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.immed.offset)] + registers[SP];
+                    //word_type offset = machine_types_formOffset(instr.immed.offset);
+                    //printf("%d", offset);
+                    // Update the memory at GPR[$sp] + offset
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] + (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case SUB_F:
-                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.immed.offset)] - registers[SP];
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] + (memory.words[registers[instr.comp.rs] - machine_types_formOffset(instr.comp.os)]);
+                    break;
+                case CPW_F:
+                    // Copy word
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[instr.comp.os] + machine_types_formOffset(instr.comp.os)];
+                    break;
+                case AND_F:
+                    // AND
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] & (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
+                    break;
+                case BOR_F:
+                    // OR
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] | (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
+                    break;
+                case NOR_F:
+                    // NOR
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = ~(memory.words[registers[SP]] | (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]));
+                    break;
+                case XOR_F:
+                    // XOR
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] ^ (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case LWR_F:
                     // Load the word from the calculated memory location into the register
-                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_sgnExt(instr.immed.offset)];
+                    registers[instr.comp.rt] = memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)];
                     break;
+                case SWR_F:
+                    // Store the word at the calculated memory location
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = registers[instr.comp.rs];
+                    break;
+                case SCA_F:
+                    // store computed address
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os);
+                    break;
+                case LWI_F:
+                    // load word indirect
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]];
+                    break;
+                case NEG_F:
+                    // neg
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = -memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)];
+                    break;
+            }
+            
+        case other_comp_instr_type:
+            switch (instr.othc.func) {
                 case MUL_F:
                     registers[instr.comp.rt] = registers[instr.comp.rs] * registers[instr.comp.rt];
                     break;
                 case DIV_F:
                     if (registers[instr.comp.rt] == 0) {
                         bail_with_error("Division by zero.");
+                        //machine_types_formOffset
                     }
                     registers[instr.comp.rt] = registers[instr.comp.rs] / registers[instr.comp.rt];
                     break;
-                case SWR_F:
-                    // Store the word at the calculated memory location
-                    memory.words[registers[instr.comp.rt] + machine_types_sgnExt(instr.immed.offset)] = registers[instr.comp.rs];
-                    break;
-                default:
-                    bail_with_error("Unknown computational function code: %d", instr.comp.func);
+                case SRI_F:
+                    registers[instr.othc.reg] -= machine_types_sgnExt(instr.othc.arg);
                     break;
             }
             break;
@@ -254,9 +294,7 @@ void execute_instruction(bin_instr_t instr) {
                         PC += machine_types_formOffset(instr.immed.immed);
                     }
                     break;
-                default:
-                    //printf("Handling custom immediate instruction with opcode %d\n", instr.immed.op);
-                    break;
+                
             }
             break;
 
@@ -290,7 +328,7 @@ void handle_system_call(bin_instr_t instr) {
             //printf("Tracing stopped\n");
             break;
         default:
-            bail_with_error("Unknown system call code: %d", code);
+            //bail_with_error("Unknown system call code: %d", code);
             break;
     }
 }
