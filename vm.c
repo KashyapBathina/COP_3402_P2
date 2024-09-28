@@ -206,12 +206,13 @@ void execute_instruction(bin_instr_t instr) {
         case comp_instr_type:
             switch (instr.comp.func) {
                 case ADD_F:
+                    //add
                     //word_type offset = machine_types_formOffset(instr.immed.offset);
                     //printf("%d", offset);
-                    // Update the memory at GPR[$sp] + offset
                     memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] + (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case SUB_F:
+                    // sub
                     memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] + (memory.words[registers[instr.comp.rs] - machine_types_formOffset(instr.comp.os)]);
                     break;
                 case CPW_F:
@@ -220,19 +221,19 @@ void execute_instruction(bin_instr_t instr) {
                     break;
                 case AND_F:
                     // AND
-                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] & (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
+                    memory.uwords[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.uwords[registers[SP]] & (memory.uwords[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case BOR_F:
                     // OR
-                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] | (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
+                    memory.uwords[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.uwords[registers[SP]] | (memory.uwords[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case NOR_F:
                     // NOR
-                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = ~(memory.words[registers[SP]] | (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]));
+                    memory.uwords[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = ~(memory.uwords[registers[SP]] | (memory.uwords[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]));
                     break;
                 case XOR_F:
                     // XOR
-                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] ^ (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
+                    memory.uwords[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.uwords[registers[SP]] ^ (memory.uwords[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case LWR_F:
                     // Load the word from the calculated memory location into the register
@@ -255,52 +256,180 @@ void execute_instruction(bin_instr_t instr) {
                     memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = -memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)];
                     break;
             }
+        break;
+            
+            
             
         case other_comp_instr_type:
             switch (instr.othc.func) {
-                case MUL_F:
-                    registers[instr.comp.rt] = registers[instr.comp.rs] * registers[instr.comp.rt];
+                case LIT_F:
+                    // load
+                    memory.words[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)] = machine_types_sgnExt(instr.othc.arg);
                     break;
-                case DIV_F:
-                    if (registers[instr.comp.rt] == 0) {
-                        bail_with_error("Division by zero.");
-                        //machine_types_formOffset
-                    }
-                    registers[instr.comp.rt] = registers[instr.comp.rs] / registers[instr.comp.rt];
+                case ARI_F:
+                    // add register immeditae 
+                    registers[instr.othc.reg] += machine_types_sgnExt(instr.othc.arg);
                     break;
                 case SRI_F:
+                    // sub register immeditae 
                     registers[instr.othc.reg] -= machine_types_sgnExt(instr.othc.arg);
                     break;
+                case MUL_F:
+                    // multiply
+                    unsigned long long product = (unsigned long long)memory.words[registers[SP]] * (unsigned long long)(memory.words[registers[instr.othc.reg]] + machine_types_formOffset(instr.othc.offset));
+                    HI = (word_type)(product >> 32); 
+                    LO = (word_type)(product & 0xFFFFFFFF); 
+                    break;
+                case DIV_F:
+                    // divide
+                    HI = memory.words[registers[SP]] % (memory.words[registers[instr.othc.reg]] + machine_types_formOffset(instr.othc.offset));
+                    LO = memory.words[registers[SP]] / (memory.words[registers[instr.othc.reg]] + machine_types_formOffset(instr.othc.offset));
+                    break;
+                case CFHI_F:
+                    // copy from HI
+                    memory.words[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)] = HI;
+                    break;
+                case CFLO_F:
+                    // copy from LO
+                    memory.words[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)] = LO;
+                    break;
+                case SLL_F:
+                    // shift left
+                    memory.uwords[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)] = memory.uwords[registers[SP]] << instr.othc.arg;
+                    break;
+                case SRL_F:
+                    // shift right
+                    memory.uwords[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)] = memory.uwords[registers[SP]] >> instr.othc.arg;
+                    break;
+                case JMP_F:
+                    // jump
+                    PC = memory.uwords[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)];
+                    break;
+                case CSI_F:
+                    // call subroutine indirect
+                    registers[RA] = PC;
+                    PC = memory.words[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)];
+                    break;
+                case JREL_F:
+                    // jump relative to address
+                    PC = ((PC-1) + machine_types_formOffset(instr.othc.offset));
+                    break;
             }
-            break;
+        break;
+            
+            
+            
+        case syscall_instr_type:
+            switch (instr.syscall.code) {
+                case exit_sc:
+                    // exit 
+                    exit(machine_types_sgnExt(instr.syscall.offset));
+                    break;
+                case print_str_sc:
+                    // print str
+                    memory.words[registers[SP]] = printf("%s", (char*)&memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)]);
+                    break;
+                case print_char_sc:
+                    // print char
+                    memory.words[registers[SP]] = fputc((char)memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)], stdout);
+                    break;
+                case read_char_sc:
+                    // read char
+                    memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)] = getc(stdin);
+                    break;
+                case start_tracing_sc:
+                    // VM trace
+                    tracing = true;
+                    break;
+                case stop_tracing_sc:
+                    // dont VM trace
+                    tracing = false;
+                    break;
+            }
+        break;
+
+
 
         case immed_instr_type:
             switch (instr.immed.op) {
                 case ADDI_O:
-                    // Calculate the correct offset from $sp
-                    word_type offset = machine_types_formOffset(instr.immed.offset);
-                    //printf("%d", offset);
-                    // Update the memory at GPR[$sp] + offset
-                    memory.words[registers[SP] + offset] = instr.immed.immed;
+                    // add immediate
+                    memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] += machine_types_zeroExt(instr.immed.immed);
                     break;
                 case ANDI_O:
-                    registers[instr.immed.reg] &= machine_types_zeroExt(instr.immed.immed);
+                    // and immediate
+                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] &= machine_types_zeroExt(instr.immed.immed);
                     break;
                 case BORI_O:
-                    registers[instr.immed.reg] |= machine_types_zeroExt(instr.immed.immed);
+                    // or immediate
+                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] |= machine_types_zeroExt(instr.immed.immed);
+                    break;
+                case NORI_O:
+                    // nor immediate
+                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] = ~(memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)]) | machine_types_zeroExt(instr.immed.immed);
+                    break;
+                case XORI_O:
+                    // xor immediate
+                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] ^= machine_types_zeroExt(instr.immed.immed);
                     break;
                 case BEQ_O:
-                    if (registers[SP] == registers[instr.immed.reg]) {
-                        PC += machine_types_formOffset(instr.immed.immed);
+                    // branch equal
+                    if (memory.words[registers[SP]] == memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)]) {
+                        PC = (PC-1) + machine_types_formOffset(instr.immed.immed);
                     }
                     break;
-                
+                case BGEZ_O:
+                    // branch >=0 
+                    if (memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] >= 0) {
+                        PC = (PC-1) + machine_types_formOffset(instr.immed.immed);
+                    }
+                    break;
+                case BGTZ_O:
+                    // branch >0 
+                    if (memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] > 0) {
+                        PC = (PC-1) + machine_types_formOffset(instr.immed.immed);
+                    }
+                    break;
+                case BLEZ_O:
+                    // branch <= 0 
+                    if (memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] <= 0) {
+                        PC = (PC-1) + machine_types_formOffset(instr.immed.immed);
+                    }
+                    break;
+                case BLTZ_O:
+                    // branch < 0 
+                    if (memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] < 0) {
+                        PC = (PC-1) + machine_types_formOffset(instr.immed.immed);
+                    }
+                    break;
+                case BNE_O:
+                    // branch != 
+                    if (memory.words[registers[SP]] != memory.words[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)]) {
+                        PC = (PC-1) + machine_types_formOffset(instr.immed.immed);
+                    }
+                    break;
             }
             break;
-
-        case syscall_instr_type:
-            handle_system_call(instr);
-            break;
+            
+            
+            
+        case jump_instr_type:
+            switch (instr.jump.op) {
+                case JMPA_O:
+                    // jump to address
+                    PC = machine_types_formAddress(PC-1, instr.jump.addr);
+                    break;
+                case CALL_O:
+                    // call subroutine
+                    registers[RA] = PC;
+                    PC = machine_types_formAddress(PC-1, instr.jump.addr);
+                    break;
+                case RTN_O:
+                    // return from subroutine
+                    PC = registers[RA];
+                    break;
+            }
+        break;
 
         default:
             //bail_with_error("Unknown instruction type: %d", it);
