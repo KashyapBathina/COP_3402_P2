@@ -126,38 +126,79 @@ void print_program(const BOFHeader *header) {
     for (word_type addr = header->text_start_address; addr < (header->text_start_address + header->text_length); addr++) {
         bin_instr_t instr = memory.instrs[addr];
         const char *asm_form = instruction_assembly_form(addr, instr);
-        printf("%5u: %s\n", addr, asm_form);
+        printf("%6u: %s\n", addr, asm_form);
     }
+    
 
-
-    int i = 0, items_in_line = 0;
-
-    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++, i++) {
-        if (memory.words[addr] == 0 && memory.words[addr + 1] == 0 && memory.words[addr + 2] == 0) {
-            // print ellipses and move to a new line if alrdy has 4 items
-            if (items_in_line == 4) {
-                printf("%5u: 0\n", addr);  
-                printf("     ...\n");      
-            } else {
-                printf("%5u: 0\t...\n", addr);  
+    // Print data
+    int chars_in_line = 0;
+    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++) {
+        // handling zeroes and otherwise
+        if (memory.words[addr] == 0) {            
+            chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
+            
+                
+            if (addr!= (header->data_start_address + header->data_length) && memory.words[addr+1] == 0) {
+                while (memory.words[addr]==0 && addr!=header->data_start_address + header->data_length) {
+                    addr++;
+                }
+                if (addr!=header->data_start_address + header->data_length) chars_in_line += printf("...\t");
             }
+        }
+        else {
+            chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
+        }
+        
+        
+        //int temp_count = snprintf(NULL, 0, "%d: %d", addr, memory.words[addr]);
+        if (chars_in_line /*+ temp_count */ > 59) {
+            printf("\n");
+            chars_in_line = 0;
+        }
+    }
+    printf("...");
+    printf("\n");
+    /*
+    int chars_in_line = 0;
+    int zero_printed = 0; // flag to track if a zero has been printed before an ellipsis
+    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++) {
+        if (memory.words[addr] == 0) {
+            if (zero_printed == 0) {
+                int printed_chars = printf("%5u: 0", addr);
+                chars_in_line += printed_chars;
+                zero_printed = 1;  // Mark that we've printed the first zero
 
-            while (addr <= header->data_start_address + header->data_length && memory.words[addr] == 0) {
-                addr++;
+                if (chars_in_line >= 59) {
+                    printf("\n");
+                    chars_in_line = 0;
+                }
             }
-            addr--; 
-            items_in_line = 0; 
         } else {
-            printf("%5u: %d\t", addr, memory.words[addr]);
-            items_in_line++;
+            // Print non-zero values
+            if (zero_printed == 1) {
+                printf(" ...");
+                chars_in_line += 4;
+                zero_printed = 0;  // Reset zero flag after printing ellipsis
+            }
 
-            if (items_in_line == 5) {
+            int printed_chars = printf("%5u: %d", addr, memory.words[addr]);
+            chars_in_line += printed_chars;
+
+            if (chars_in_line >= 59) {
                 printf("\n");
-                items_in_line = 0;
+                chars_in_line = 0;
+            } else {
+                printf(" ");
+                chars_in_line += 1;  // Account for the space added after each value
             }
         }
     }
-    printf("\n");
+
+    // Final newline if necessary
+    if (chars_in_line > 0) {
+        printf("\n");
+    }
+    */
 }
 
 
@@ -333,6 +374,9 @@ void execute_instruction(bin_instr_t instr) {
                     // print char
                     memory.words[registers[SP]] = fputc((char)memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)], stdout);
                     break;
+                case print_int_sc:
+                    // print int;
+                    memory.words[registers[SP]] = printf("%d", (int) memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)]);
                 case read_char_sc:
                     // read char
                     memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)] = getc(stdin);
@@ -471,6 +515,8 @@ void print_vm_state(address_type addr, bin_instr_t instr) {
     }
     printf("\n");
 
+
+    /*
     for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
         if (addr==registers[GP] || addr==registers[SP] || memory.words[addr] != 0) {
             printf("%5u: %d\t", addr, memory.words[addr]);
@@ -485,6 +531,34 @@ void print_vm_state(address_type addr, bin_instr_t instr) {
             }
         }
     }
+    */
+    // Print data
+    int chars_in_line = 0;
+    for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
+        // handling zeroes and otherwise
+        if (memory.words[addr] == 0) {            
+            chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
+            
+                
+            if (addr!= (registers[SP]) && memory.words[addr+1] == 0) {
+                while (memory.words[addr]==0 && addr!=registers[SP]) {
+                    addr++;
+                }
+                if (addr!=registers[SP]) chars_in_line += printf("...\t");
+            }
+        }
+        else {
+            chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
+        }
+        
+        
+        //int temp_count = snprintf(NULL, 0, "%d: %d", addr, memory.words[addr]);
+        if (chars_in_line /*+ temp_count */ > 59) {
+            printf("\n");
+            chars_in_line = 0;
+        }
+    }
+    printf("...");
     printf("\n");
 
     
