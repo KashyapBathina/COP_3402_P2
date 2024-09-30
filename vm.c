@@ -34,7 +34,7 @@ word_type PC;                        // Program Counter
 word_type HI, LO;                    // Special registers
 
 // Tracing flag
-bool tracing = false;
+bool tracing = true;
 
 // System call codes
 #define EXIT_SC 1            // Exit system call code
@@ -158,56 +158,11 @@ void print_program(const BOFHeader *header) {
     }
     printf("...");
     printf("\n");
-    /*
-    int chars_in_line = 0;
-    int zero_printed = 0; // flag to track if a zero has been printed before an ellipsis
-    for (word_type addr = header->data_start_address; addr <= (header->data_start_address + header->data_length); addr++) {
-        if (memory.words[addr] == 0) {
-            if (zero_printed == 0) {
-                int printed_chars = printf("%5u: 0", addr);
-                chars_in_line += printed_chars;
-                zero_printed = 1;  // Mark that we've printed the first zero
-
-                if (chars_in_line >= 59) {
-                    printf("\n");
-                    chars_in_line = 0;
-                }
-            }
-        } else {
-            // Print non-zero values
-            if (zero_printed == 1) {
-                printf(" ...");
-                chars_in_line += 4;
-                zero_printed = 0;  // Reset zero flag after printing ellipsis
-            }
-
-            int printed_chars = printf("%5u: %d", addr, memory.words[addr]);
-            chars_in_line += printed_chars;
-
-            if (chars_in_line >= 59) {
-                printf("\n");
-                chars_in_line = 0;
-            } else {
-                printf(" ");
-                chars_in_line += 1;  // Account for the space added after each value
-            }
-        }
-    }
-
-    // Final newline if necessary
-    if (chars_in_line > 0) {
-        printf("\n");
-    }
-    */
 }
 
 
 // Function to execute the program
 void execute_program(const BOFHeader *header) {
-
-    bin_instr_t instr = memory.instrs[PC];
-    address_type current_addr = PC;
-    print_vm_state(current_addr, instr);
     
     // Ensure the loop runs until the last instruction in the text section
     while (PC < header->text_start_address + header->text_length) {
@@ -218,22 +173,21 @@ void execute_program(const BOFHeader *header) {
         const char *asm_form = instruction_assembly_form(current_addr, instr);
         if (strcmp(asm_form, "EXIT 0") == 0) {
             // Print the final state before exiting
-            print_vm_state(current_addr, instr);
+            if (tracing) print_vm_state(current_addr, instr);
             break;  // Exit loop after processing the EXIT instruction
         }
         
-
+        
         // Handle tracing if enabled
         if (tracing) {
             print_vm_state(current_addr, instr);
         }
-
+        PC++;
         // Execute the instruction
         execute_instruction(instr);
         
 
         // Increment PC after processing the instruction
-        PC++;
     }
 }
 
@@ -254,11 +208,11 @@ void execute_instruction(bin_instr_t instr) {
                     break;
                 case SUB_F:
                     // sub
-                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] + (memory.words[registers[instr.comp.rs] - machine_types_formOffset(instr.comp.os)]);
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[SP]] - (memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)]);
                     break;
                 case CPW_F:
                     // Copy word
-                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[instr.comp.os] + machine_types_formOffset(instr.comp.os)];
+                    memory.words[registers[instr.comp.rt] + machine_types_formOffset(instr.comp.ot)] = memory.words[registers[instr.comp.rs] + machine_types_formOffset(instr.comp.os)];
                     break;
                 case AND_F:
                     // AND
@@ -317,14 +271,14 @@ void execute_instruction(bin_instr_t instr) {
                     break;
                 case MUL_F:
                     // multiply
-                    unsigned long long product = (unsigned long long)memory.words[registers[SP]] * (unsigned long long)(memory.words[registers[instr.othc.reg]] + machine_types_formOffset(instr.othc.offset));
+                    unsigned long long product = (unsigned long long) (memory.words[registers[SP]]) * (unsigned long long) ( (unsigned long long)memory.words[registers[instr.othc.reg] + (unsigned long long) machine_types_formOffset(instr.othc.offset)]);
                     HI = (word_type)(product >> 32); 
-                    LO = (word_type)(product & 0xFFFFFFFF); 
+                    LO = (word_type)(product & 0xFFFFFFFF);
                     break;
                 case DIV_F:
                     // divide
-                    HI = memory.words[registers[SP]] % (memory.words[registers[instr.othc.reg]] + machine_types_formOffset(instr.othc.offset));
-                    LO = memory.words[registers[SP]] / (memory.words[registers[instr.othc.reg]] + machine_types_formOffset(instr.othc.offset));
+                    HI = memory.words[registers[SP]] % (memory.words[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)]);
+                    LO = memory.words[registers[SP]] / (memory.words[registers[instr.othc.reg] + machine_types_formOffset(instr.othc.offset)]);
                     break;
                 case CFHI_F:
                     // copy from HI
@@ -376,7 +330,8 @@ void execute_instruction(bin_instr_t instr) {
                     break;
                 case print_int_sc:
                     // print int;
-                    memory.words[registers[SP]] = printf("%d", (int) memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)]);
+                    memory.words[registers[SP]] = printf("%d", memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)]);
+                    break;
                 case read_char_sc:
                     // read char
                     memory.words[registers[instr.syscall.reg] + machine_types_formOffset(instr.syscall.offset)] = getc(stdin);
@@ -406,15 +361,15 @@ void execute_instruction(bin_instr_t instr) {
                     break;
                 case BORI_O:
                     // or immediate
-                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] |= machine_types_zeroExt(instr.immed.immed);
+                    memory.uwords[registers[instr.uimmed.reg] + machine_types_formOffset(instr.uimmed.offset)] |= machine_types_zeroExt(instr.uimmed.uimmed);
                     break;
                 case NORI_O:
                     // nor immediate
-                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] = ~(memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)]) | machine_types_zeroExt(instr.immed.immed);
+                    memory.uwords[registers[instr.uimmed.reg] + machine_types_formOffset(instr.uimmed.offset)] = ~(memory.uwords[registers[instr.uimmed.reg] + machine_types_formOffset(instr.uimmed.offset)]) | machine_types_zeroExt(instr.uimmed.uimmed);
                     break;
                 case XORI_O:
                     // xor immediate
-                    memory.uwords[registers[instr.immed.reg] + machine_types_formOffset(instr.immed.offset)] ^= machine_types_zeroExt(instr.immed.immed);
+                    memory.uwords[registers[instr.uimmed.reg] + machine_types_formOffset(instr.uimmed.offset)] = (memory.uwords[registers[instr.uimmed.reg] + machine_types_formOffset(instr.uimmed.offset)]) ^ machine_types_zeroExt(instr.uimmed.uimmed);
                     break;
                 case BEQ_O:
                     // branch equal
@@ -453,7 +408,7 @@ void execute_instruction(bin_instr_t instr) {
                     }
                     break;
             }
-            break;
+        break;
             
             
             
@@ -476,93 +431,65 @@ void execute_instruction(bin_instr_t instr) {
         break;
 
         default:
-            //bail_with_error("Unknown instruction type: %d", it);
             break;
     }
 }
 
-// Function to handle system calls
-void handle_system_call(bin_instr_t instr) {
-    int code = instruction_syscall_number(instr);  // No enum used here
-
-    switch (code) {
-        case EXIT_SC:  // System call to exit the program
-            //printf("Exiting program\n");
-            exit(0);
-        case PRINT_STR_SC:
-            //printf("Printing string\n");
-            break;
-        case START_TRACING_SC:  // Start tracing
-            tracing = true;
-            //printf("Tracing started\n");
-            break;
-        case STOP_TRACING_SC:  // Stop tracing
-            tracing = false;
-            //printf("Tracing stopped\n");
-            break;
-        default:
-            //bail_with_error("Unknown system call code: %d", code);
-            break;
-    }
-}
 
 // Function to print the VM's state for tracing
 void print_vm_state(address_type addr, bin_instr_t instr) {
-    printf("      PC: %u\n", PC);
-    for (int i = 0; i < NUM_REGISTERS; i++) { // printing registers
-        printf("  GPR[%s]: %d ", regname_get(i), registers[i]);
-        if (i%4==0 && i!=0) printf("\n");
+    printf("      PC: %u", PC);
+    if (HI!=0 || LO!=0) {
+        printf("         HI: %d           LO: %d", HI, LO);
     }
     printf("\n");
-
-
-    /*
-    for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
-        if (addr==registers[GP] || addr==registers[SP] || memory.words[addr] != 0) {
-            printf("%5u: %d\t", addr, memory.words[addr]);
-        }
-        else {
-            if (addr!=registers[SP]-1 && memory.words[addr+1]==0) {
-                addr++;
-                while (memory.words[addr]==0 && memory.words[addr+1]==0 && addr!=registers[SP]-1) {
-                    addr++;
-                }
-                printf("...\t");
-            }
-        }
-    }
-    */
-    // Print data
     int chars_in_line = 0;
-    for (word_type addr = registers[GP]; addr <= registers[SP]; addr++) {
-        // handling zeroes and otherwise
-        if (memory.words[addr] == 0) {            
-            chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
-            
-                
-            if (addr!= (registers[SP]) && memory.words[addr+1] == 0) {
-                while (memory.words[addr]==0 && addr!=registers[SP]) {
-                    addr++;
-                }
-                if (addr!=registers[SP]) chars_in_line += printf("...\t");
-            }
-        }
-        else {
-            chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
-        }
-        
-        
-        //int temp_count = snprintf(NULL, 0, "%d: %d", addr, memory.words[addr]);
-        if (chars_in_line /*+ temp_count */ > 59) {
+    for (int i = 0; i < NUM_REGISTERS; i++) { // printing registers
+        chars_in_line += printf("GPR[%s]: %d\t", regname_get(i), registers[i]);
+        if (chars_in_line>59) {
             printf("\n");
             chars_in_line = 0;
         }
     }
-    printf("...");
     printf("\n");
 
+        
+        
+    // Print data
+    int consec_zeroes = 0;
+    chars_in_line = 0;
+    for (word_type addr = registers[GP]; addr <= registers[FP]; addr++) {
+        if (addr == registers[SP]) {
+            printf("\n");
+            chars_in_line = printf("%8d: %d\t", registers[SP], memory.words[registers[SP]]);
+            consec_zeroes = 0;
+        }
+        if (memory.words[addr] == 0) {   
+            if (consec_zeroes == 0) {         
+                if (addr!=registers[SP]) chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
+                consec_zeroes = 1;
+            }
+                
+            else if (consec_zeroes==1) {
+                chars_in_line += printf("        ...     ");
+                consec_zeroes = 2;
+            }
+        }
+        else {
+            if (addr!=registers[SP]) chars_in_line += printf("%8d: %d\t", addr, memory.words[addr]);
+            consec_zeroes=0;
+        }
+        
+        
+        if (chars_in_line > 59) {
+            printf("\n");
+            chars_in_line = 0;
+        }
+    }
+    printf("\n");
     
-    //printf("hello %d", memory.words[4095]);
+    
+
 
 
     const char *asm_form = instruction_assembly_form(addr, instr);

@@ -140,8 +140,6 @@ $(ASM).tab.c $(ASM).tab.h: $(ASM).y ast.h parser_types.h machine_types.h
 	$(RM) $(ASM).tab.h $(ASM).tab.c
 	$(YACC) $(YACCFLAGS) $(ASM).y
 
-$(ASM).tab.c: RCS/$(ASM).tab.c,v
-
 
 lexer.o: lexer.c lexer.h $(ASM).tab.h
 	$(CC) $(CFLAGS) -c $<
